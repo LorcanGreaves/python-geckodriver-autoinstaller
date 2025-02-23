@@ -14,7 +14,7 @@ import zipfile
 from io import BytesIO
 
 
-__author__ = 'Yeongbin Jo <yeongbin.jo@pylab.co>'
+__author__ = 'Yeongbin Jo <yeongbin.jo@pylab.co>\nAdditional contributions by Lorcan Greaves <lorcangreaves@gmail.com>'
 
 
 def get_geckodriver_filename():
@@ -41,12 +41,15 @@ def get_platform_architecture():
     if sys.platform.startswith('linux') and sys.maxsize > 2 ** 32:
         platform = 'linux'
         architecture = '64'
-    elif sys.platform == 'darwin':
+    elif sys.platform.startswith('darwin'):
         platform = 'mac'
         architecture = 'os'
-    elif sys.platform.startswith('win'):
+    elif sys.platform.startswith('win32'):
         platform = 'win'
         architecture = '32'
+    elif sys.platform.startswith('win64'):
+        platform = 'win'
+        architecture = '64'
     else:
         raise RuntimeError('Could not determine geckodriver download URL for this platform.')
     return platform, architecture
@@ -60,14 +63,11 @@ def get_geckodriver_url(version):
     :return: Download URL for geckodriver
     """
     platform, architecture = get_platform_architecture()
-
     if platform == 'win':
-        compression = 'zip'
-    else:
-        compression = 'tar.gz'
-
+            return f'https://github.com/mozilla/geckodriver/releases/download/{version}' \
+           f'/geckodriver-{version}-{platform}{architecture}.zip'
     return f'https://github.com/mozilla/geckodriver/releases/download/{version}' \
-           f'/geckodriver-{version}-{platform}{architecture}.{compression}'
+           f'/geckodriver-{version}-{platform}{architecture}.tar.gz'
 
 
 def find_binary_in_path(filename):
@@ -185,24 +185,19 @@ def download_geckodriver(cwd=False):
         except urllib.error.URLError:
             raise RuntimeError(f'Failed to download geckodriver archive: {url}')
         archive = BytesIO(response.read())
-
-        uncompress(archive, geckodriver_dir)
+        platform, _ = get_platform_architecture()
+        if platform == 'win':
+            with zipfile.ZipFile(file=archive, mode='r') as zipRef:
+                zipRef.extractall(geckodriver_dir)
+        else:
+            tar = tarfile.open(fileobj=archive, mode='r:gz')
+            tar.extractall(geckodriver_dir)
+            tar.close()
     else:
         logging.debug('geckodriver is already installed.')
     if not os.access(geckodriver_filepath, os.X_OK):
         os.chmod(geckodriver_filepath, 0o744)
     return geckodriver_filepath
-
-def uncompress(file, directory):
-    platform, _ = get_platform_architecture()
-
-    if platform == 'win':
-        with zipfile.ZipFile(file, 'r') as zip_ref:
-            zip_ref.extractall(directory)
-    else:
-        tar = tarfile.open(fileobj=file, mode='r:gz')
-        tar.extractall(directory)
-        tar.close()
 
 
 if __name__ == '__main__':
